@@ -20,47 +20,11 @@ public class MM1QueueSimulation {
     private static int SIMULATION_TIME = 60 * 60 * SECONDS_DIVIDER * HOURS; // 5 hours
     private static double LAMBDA = 2.0; // 2 clients per minute
     private static double MEAN = 24; // 0.4 minutes = 24 seconds to complete service for a client
-    private static int N = 100;   // how many times to execute the simulation
-    private static final List<SimulationStats> statsList = new ArrayList<>();
 
     public static void main(String[] args) {
-        boolean writeToCsv = false;
-        if (args.length > 0) {
-            HOURS = Integer.parseInt(args[0]);
-        }
-        if (args.length > 1) {
-            LAMBDA = Double.parseDouble(args[1]);
-        }
-        if (args.length > 2) {
-            MEAN = Double.parseDouble(args[2]);
-        }
-        if (args.length > 3) {
-            N = Integer.parseInt(args[3]);
-        }
-        if (args.length > 4) {
-            writeToCsv = Integer.parseInt(args[4]) == 1;
-        }
-
-        // execute simulation for N times
-        for (int counter = 0; counter < N; counter++) {
-            executeSimulation(true);
-        }
-
-        // aggregated averages for all simulations executed
-        // average customers total in system
-        double avgCustomersInSystem = statsList.stream().map(x -> x.avgCustInSystem).mapToDouble(Double::doubleValue).sum() / (1.0 * N);
-        // average customers total in system
-        double avgCustomersInQueue = statsList.stream().map(x -> x.avgCustInQueue).mapToDouble(Double::doubleValue).sum() / (1.0 * N);
-        // average time a customer spent in system
-        double avgTimeInSystem = statsList.stream().map(x -> x.avgTimeInSystem).mapToDouble(Double::doubleValue).sum() / (1.0 * N);
-        // average time a customer spent in queue
-        double avgTimeInQueue = statsList.stream().map(x -> x.avgTimeInQueue).mapToDouble(Double::doubleValue).sum() / (1.0 * N);
-
-        printAveragesToConsole(avgCustomersInSystem, avgCustomersInQueue, avgTimeInSystem, avgTimeInQueue, (1.0/ N));
-
-        if (writeToCsv) {
-            writeSimulationStatsToCsv(statsList, "simulation_stats.csv", (1.0 / N));
-        }
+        System.out.printf("Starting Simulation for %d hours with λ=%.2f and 1/μ=%.2f\n", HOURS, LAMBDA, MEAN);
+        executeSimulation(true);
+        System.out.println("Simulation ended");
     }
 
     /**
@@ -87,10 +51,8 @@ public class MM1QueueSimulation {
      * VARIOUS
      *  -> we keep track of serviced Customers and use their fields to calculate the avg time in system and time in queue
      *  -> we keep track for each iteration the number of customers in system and in queue to calculate averages
-     * @param runOncePrintToConsole
      */
-    public static void executeSimulation(boolean runOncePrintToConsole) {
-        //
+    public static void executeSimulation(boolean printSystemStatsLive) {
         List<Customer> servicedCustomersList = new ArrayList<>();
         List<Integer> customersInSystem = new ArrayList<>();
         List<Integer> customersInQueue = new ArrayList<>();
@@ -153,30 +115,30 @@ public class MM1QueueSimulation {
 
         }
 
+        if (printSystemStatsLive) {
+            for (int index = 0; index < customersInQueue.size(); index++) {
+                if (index % 1000 == 0) {
+                    System.out.printf("Current Timestamp (seconds) for System in simulation = %d. Queue size = %d \n", index/10, customersInQueue.get(index));
+                }
+            }
+        }
+        System.out.println("Total customers serviced = " + servicedCustomersList.size());
+
         // calculate stats for this simulation
         double avgCustomersInSystem = customersInSystem.stream().mapToInt(Integer::intValue).sum() / (1.0 * customersInSystem.size());
         double avgCustomersInQueue = customersInQueue.stream().mapToInt(Integer::intValue).sum() / (1.0 * customersInSystem.size());
         double avgTimeInSystem = servicedCustomersList.stream().map(customer -> customer.getEndTime() - customer.getArrivalTime())
-                .collect(Collectors.toList()).stream().mapToInt(Integer::intValue).sum() / (1.0 * servicedCustomersList.size());
+                .collect(Collectors.toList()).stream().mapToInt(Integer::intValue).sum() / (10.0 * servicedCustomersList.size());
         double avgTimeInQueue = servicedCustomersList.stream().map(customer -> customer.getStartTime() - customer.getArrivalTime())
-                .collect(Collectors.toList()).stream().mapToInt(Integer::intValue).sum() / (1.0 * servicedCustomersList.size());
+                .collect(Collectors.toList()).stream().mapToInt(Integer::intValue).sum() / (10.0 * servicedCustomersList.size());
 
         // flag true - running simulation scenario once - print inner stats
-        if (runOncePrintToConsole) {
-            printAveragesToConsole(avgCustomersInSystem, avgCustomersInQueue, avgTimeInSystem, avgTimeInQueue, 0.1);
-        }
-
-        // keep history of values to present averages for N simulations run
-        SimulationStats simulationStats = new SimulationStats(avgCustomersInSystem, avgCustomersInQueue, avgTimeInSystem, avgTimeInQueue);
-        statsList.add(simulationStats);
+        printAveragesToConsole(avgCustomersInSystem, avgCustomersInQueue, avgTimeInSystem, avgTimeInQueue);
     }
-
-
 
     /**
      generates values that follow the poisson distribution for λ = lambda
      Returns a Collection (Queue) holding the generated values
-
      NOTE: return as Queue is an implementation decision for the main business logic
      */
     public static Queue<Integer> clientArrivalTimes(double lambda, double timeInterval) {
@@ -188,7 +150,7 @@ public class MM1QueueSimulation {
             double interArrivalTime = -Math.log(1.0 - Math.random()) / (lambda / 60.0); // lambda in clients per second
             currentTime += interArrivalTime;
             if (currentTime < (timeInterval + offset)) {
-                arrivalTimes.add((int)(currentTime*10));
+                arrivalTimes.add((int)(currentTime * 10));
             }
         }
         // uncommented to print out related information
@@ -223,20 +185,19 @@ public class MM1QueueSimulation {
         return values;
     }
 
-    private static void printAveragesToConsole(double avgCustomersInSystem, double avgCustomersInQueue, double avgTimeInSystem, double avgTimeInQueue, double divider) {
+    private static void printAveragesToConsole(double avgCustomersInSystem, double avgCustomersInQueue, double avgTimeInSystem, double avgTimeInQueue) {
+        System.out.println();
         // average customers total in system
-        System.out.printf("Average number of customers in the system: %.2f \n", avgCustomersInSystem);
+        System.out.printf("Average number of customers in the system: %.2f. Expected = 4\n", avgCustomersInSystem);
 
         // average customers total in system
-        System.out.printf("Average number of customers in the queue: %.2f \n", avgCustomersInQueue);
+        System.out.printf("Average number of customers in the queue: %.2f. Expected = 3.2 \n", avgCustomersInQueue);
 
         // average time a customer spent in system
-        System.out.printf("Average time a customer spent in the system: %.2f seconds.\n", (avgTimeInSystem * divider));
+        System.out.printf("Average time a customer spent in the system: %.2f seconds. Expected = 120\n", (avgTimeInSystem));
 
         // average time a customer spent in queue
-        System.out.printf("Average time a customer spent in the queue: %.2f seconds.\n\n", (avgTimeInQueue * divider));
+        System.out.printf("Average time a customer spent in the queue: %.2f seconds. Expected = 96\n\n", (avgTimeInQueue));
     }
-
-
 
 }

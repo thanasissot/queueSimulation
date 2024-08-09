@@ -8,6 +8,7 @@ public class Customer {
 
     public Customer(int arrivalTime) {
         this.arrivalTime = arrivalTime;
+//        System.out.printf("New customer arrived at [%d]\n", arrivalTime);
     }
 
     public void startService(int startTime) {
